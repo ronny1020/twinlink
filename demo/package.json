@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "bun --hot index.ts"
+    "start": "bun --hot index.ts",
+    "build": "rm -rf dist && bun build index.html --outdir dist --minify"
   },
   "dependencies": {
     "twinlink": "file:..",

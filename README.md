@@ -276,6 +276,10 @@ To compile the library for Node.js and other environments:
 bun run build
 ```
 
+### Deployment
+
+The demo is automatically deployed to GitHub Pages via CI/CD on every push to `master`.
+
 ---
 
 ## Example API

@@ -26,6 +26,7 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "demo": "bun --filter demo start",
+    "demo:build": "bun --filter demo build",
     "test": "bun test",
     "prepare": "husky"
   },
