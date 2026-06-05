@@ -23,6 +23,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/'],
+    ignores: ['dist/', 'demo/dist/'],
   },
 )

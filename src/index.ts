@@ -24,6 +24,12 @@ interface SignalData {
   candidates: RTCIceCandidateInit[]
 }
 
+type InternalMessage =
+  | { __twinlink: 'ping'; id: string; sentAt: number }
+  | { __twinlink: 'pong'; id: string; sentAt: number }
+
+const ICE_GATHERING_TIMEOUT_MS = 15000
+
 export function createTwinLink<T = unknown>(
   config?: RTCConfiguration,
 ): TwinLink<T> {
@@ -38,6 +44,10 @@ export function createTwinLink<T = unknown>(
   let fastHandler: ((data: T) => void) | null = null
   let reliableHandler: ((data: T) => void) | null = null
   let stateHandler: ((state: RTCPeerConnectionState) => void) | null = null
+  let latencyValue = 0
+  let jitterValue = 0
+  let previousLatency: number | null = null
+  const pendingPings = new Map<string, (latency: number) => void>()
 
   const iceCandidates: RTCIceCandidateInit[] = []
 
@@ -51,9 +61,60 @@ export function createTwinLink<T = unknown>(
     if (stateHandler) stateHandler(pc.connectionState)
   }
 
+  const sendReliable = (data: unknown) => {
+    if (reliableChannel?.readyState === 'open') {
+      reliableChannel.send(JSON.stringify(data))
+      return true
+    }
+    return false
+  }
+
+  const handleInternalMessage = (data: unknown) => {
+    if (
+      typeof data !== 'object' ||
+      data === null ||
+      !('__twinlink' in data) ||
+      !('id' in data) ||
+      !('sentAt' in data)
+    ) {
+      return false
+    }
+
+    const message = data as InternalMessage
+    if (typeof message.id !== 'string' || typeof message.sentAt !== 'number') {
+      return false
+    }
+
+    if (message.__twinlink === 'ping') {
+      sendReliable({
+        __twinlink: 'pong',
+        id: message.id,
+        sentAt: message.sentAt,
+      })
+      return true
+    }
+
+    if (message.__twinlink === 'pong') {
+      const resolve = pendingPings.get(message.id)
+      if (resolve) {
+        pendingPings.delete(message.id)
+        const latency = performance.now() - message.sentAt
+        jitterValue =
+          previousLatency === null ? 0 : Math.abs(latency - previousLatency)
+        previousLatency = latency
+        latencyValue = latency
+        resolve(latency)
+      }
+      return true
+    }
+
+    return false
+  }
+
   const setupChannel = (channel: RTCDataChannel, type: 'fast' | 'reliable') => {
     channel.onmessage = (event) => {
       const data = JSON.parse(event.data) as T
+      if (type === 'reliable' && handleInternalMessage(data)) return
       if (type === 'fast' && fastHandler) fastHandler(data)
       if (type === 'reliable' && reliableHandler) reliableHandler(data)
     }
@@ -71,17 +132,29 @@ export function createTwinLink<T = unknown>(
   }
 
   const waitForIce = () =>
-    new Promise<void>((resolve) => {
+    new Promise<void>((resolve, reject) => {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+      const cleanup = () => {
+        if (timeoutId) clearTimeout(timeoutId)
+        pc.removeEventListener('icegatheringstatechange', check)
+      }
+
+      const check = () => {
+        if (pc.iceGatheringState === 'complete') {
+          cleanup()
+          resolve()
+        }
+      }
+
       if (pc.iceGatheringState === 'complete') {
         resolve()
       } else {
-        const check = () => {
-          if (pc.iceGatheringState === 'complete') {
-            pc.removeEventListener('icegatheringstatechange', check)
-            resolve()
-          }
-        }
         pc.addEventListener('icegatheringstatechange', check)
+        timeoutId = setTimeout(() => {
+          cleanup()
+          reject(new Error('Timed out waiting for ICE gathering to complete'))
+        }, ICE_GATHERING_TIMEOUT_MS)
       }
     })
 
@@ -134,16 +207,36 @@ export function createTwinLink<T = unknown>(
     },
 
     async ping() {
-      // Simple ping-pong could be implemented here via data channel
-      // For now returning 0 as placeholder
-      return 0
+      const channel = reliableChannel
+      if (!channel || channel.readyState !== 'open') {
+        throw new Error('Reliable channel is not open')
+      }
+
+      const id = crypto.randomUUID()
+      const sentAt = performance.now()
+
+      const latency = await new Promise<number>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          pendingPings.delete(id)
+          reject(new Error('Timed out waiting for ping response'))
+        }, 5000)
+
+        pendingPings.set(id, (value) => {
+          clearTimeout(timeoutId)
+          resolve(value)
+        })
+
+        channel.send(JSON.stringify({ __twinlink: 'ping', id, sentAt }))
+      })
+
+      return latency
     },
 
     get latency() {
-      return 0
+      return latencyValue
     },
     get jitter() {
-      return 0
+      return jitterValue
     },
     get connectionState() {
       return pc.connectionState
@@ -162,9 +255,7 @@ export function createTwinLink<T = unknown>(
 
     reliable: {
       send(data: T) {
-        if (reliableChannel?.readyState === 'open') {
-          reliableChannel.send(JSON.stringify(data))
-        }
+        sendReliable(data)
       },
       onMessage(handler: (data: T) => void) {
         reliableHandler = handler

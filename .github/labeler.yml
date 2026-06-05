@@ -1,0 +1,27 @@
+# This file configures the labeler GitHub Action.
+# For more info: https://github.com/actions/labeler
+
+src:
+  - changed-files:
+      - any-glob-to-any-file: src/**/*
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: tests/**/*
+
+demo:
+  - changed-files:
+      - any-glob-to-any-file: demo/**/*
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: .github/**/*
+      - any-glob-to-any-file: .husky/**/*
+
+config:
+  - changed-files:
+      - any-glob-to-any-file: '*.json'
+      - any-glob-to-any-file: '*.js'
+      - any-glob-to-any-file: '*.ts'
+      - any-glob-to-any-file: .gitignore
+      - any-glob-to-any-file: .editorconfig
