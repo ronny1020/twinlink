@@ -1,0 +1,63 @@
+{
+  "name": "twinlink",
+  "version": "0.1.0",
+  "description": "A lightweight toolkit for creating direct 1-on-1 browser-to-browser connections using WebRTC Data Channels.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "bun build src/index.ts --outdir ./dist --watch",
+    "build": "rm -rf dist && bun build src/index.ts --outdir ./dist --minify --sourcemap=inline && mv dist/index.js dist/index.mjs && bun build src/index.ts --outdir ./dist --minify --sourcemap=inline --format=cjs && tsc --emitDeclarationOnly --declaration --noEmit false --outDir dist && cp dist/index.d.ts dist/index.mjs.d.ts && rm -f dist/*.test.d.ts",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "demo": "bun --hot demo/index.ts",
+    "test": "bun test",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "webrtc",
+    "p2p",
+    "datachannel",
+    "browser-to-browser",
+    "1-on-1"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/twinlink-org/twinlink.git"
+  },
+  "bugs": {
+    "url": "https://github.com/twinlink-org/twinlink/issues"
+  },
+  "homepage": "https://github.com/twinlink-org/twinlink#readme",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/bun": "latest",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.60.1",
+    "@typescript-eslint/parser": "^8.60.1",
+    "eslint": "^10.4.1",
+    "eslint-plugin-prettier": "^5.5.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.8.3",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.60.1"
+  }
+}
