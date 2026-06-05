@@ -1,14 +1,29 @@
 import { expect, describe, it, beforeAll } from 'bun:test'
 import { createTwinLink } from './index'
 
+let latestPeerConnection:
+  | {
+      triggerDataChannel(channel: RTCDataChannel): void
+    }
+  | undefined
+
 // Mock WebRTC APIs
 beforeAll(() => {
   // @ts-expect-error - Mocking global for testing
   globalThis.RTCPeerConnection = class {
     connectionState = 'new'
     iceGatheringState = 'new'
+    ondatachannel: ((event: RTCDataChannelEvent) => void) | null = null
+    constructor() {
+      latestPeerConnection = {
+        triggerDataChannel: (channel: RTCDataChannel) => {
+          this.ondatachannel?.({ channel } as RTCDataChannelEvent)
+        },
+      }
+    }
     createDataChannel() {
       return {
+        label: 'mock',
         onmessage: null,
         onopen: null,
         onclose: null,
@@ -75,6 +90,39 @@ describe('TwinLink Initialization', () => {
     const link = createTwinLink()
     expect(link.connectionState).toBe('new')
     expect(link.latency).toBe(0)
+    expect(link.jitter).toBe(0)
+  })
+
+  it('should measure ping latency over the reliable channel', async () => {
+    const link = createTwinLink()
+    const channel = {
+      label: 'reliable',
+      readyState: 'open',
+      onmessage: null as ((event: MessageEvent<string>) => void) | null,
+      send(data: string) {
+        const ping = JSON.parse(data) as {
+          __twinlink: 'ping'
+          id: string
+          sentAt: number
+        }
+
+        queueMicrotask(() => {
+          channel.onmessage?.({
+            data: JSON.stringify({
+              __twinlink: 'pong',
+              id: ping.id,
+              sentAt: ping.sentAt,
+            }),
+          } as MessageEvent<string>)
+        })
+      },
+    }
+
+    latestPeerConnection?.triggerDataChannel(channel as RTCDataChannel)
+
+    const latency = await link.ping()
+    expect(latency).toBeGreaterThanOrEqual(0)
+    expect(link.latency).toBe(latency)
     expect(link.jitter).toBe(0)
   })
 })
