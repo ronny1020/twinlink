@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createTwinLink, type TwinLink } from '../../src/index'
+import { createTwinLink, type TwinLink } from 'twinlink'
 
 type ChatMessage = {
   type: 'chat'
