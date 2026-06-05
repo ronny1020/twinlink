@@ -10,7 +10,7 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "dev": "bun build src/index.ts --outdir ./dist --watch",
-    "build": "rm -rf dist && bun build src/index.ts --outdir ./dist --minify --sourcemap=inline && mv dist/index.js dist/index.mjs && bun build src/index.ts --outdir ./dist --minify --sourcemap=inline --format=cjs && tsc -p tsconfig.build.json && cp dist/index.d.ts dist/index.mjs.d.ts && rm -f dist/*.test.d.ts",
+    "build": "rm -rf dist && bun build src/index.ts --outdir ./dist --minify --sourcemap=inline && mv dist/index.js dist/index.mjs && bun build src/index.ts --outdir ./dist --minify --sourcemap=inline --format=cjs && mv dist/index.js dist/index.cjs && tsc -p tsconfig.build.json && cp dist/index.d.ts dist/index.mjs.d.ts && cp dist/index.d.ts dist/index.cjs.d.ts && rm -f dist/*.test.d.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
@@ -40,7 +40,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/twinlink-org/twinlink.git"
+    "url": "git+https://github.com/ronny1020/twinlink.git"
   },
   "bugs": {
     "url": "https://github.com/twinlink-org/twinlink/issues"

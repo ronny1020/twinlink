@@ -250,10 +250,14 @@ bun install
 
 ### Running the Demo
 
-The demo showcases a 1-on-1 chat using `Bun.serve` and Bun's native HTML imports.
+The demo is a separate workspace that showcases a 1-on-1 chat.
 
 ```bash
+# Run from root
 bun run demo
+
+# Or from demo folder
+cd demo && bun run start
 ```
 
 ### Testing
@@ -262,6 +266,14 @@ TwinLink uses `bun test` for unit tests and Bun's experimental `WebView` for E2E
 
 ```bash
 bun test
+```
+
+### Build
+
+To compile the library for Node.js and other environments:
+
+```bash
+bun run build
 ```
 
 ---
