@@ -16,7 +16,11 @@
     "esModuleInterop": true,
     "types": ["bun"],
     "jsx": "react-jsx",
-    "isolatedModules": true
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "twinlink": ["./src/index.ts"]
+    }
   },
   "include": ["src", "tests", "demo"]
 }
