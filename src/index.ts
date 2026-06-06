@@ -1,22 +1,23 @@
-export interface TwinLink<T = unknown> {
+export interface TwinLink<Fast = unknown, Reliable = unknown> {
   host(): Promise<string>
   join(offer: string): Promise<string>
   connect(answer: string): Promise<void>
   ping(): Promise<number>
+  close(): void
   latency: number
   jitter: number
   connectionState: RTCPeerConnectionState
   fast: {
-    send(data: T): void
-    onMessage: (handler: (data: T) => void) => void
+    send(data: Fast): void
+    onMessage: (handler: (data: Fast) => void) => () => void
   }
   reliable: {
-    send(data: T): void
-    onMessage: (handler: (data: T) => void) => void
+    send(data: Reliable): boolean
+    onMessage: (handler: (data: Reliable) => void) => () => void
   }
   onConnectionStateChange: (
     handler: (state: RTCPeerConnectionState) => void,
-  ) => void
+  ) => () => void
 }
 
 interface SignalData {
@@ -28,26 +29,68 @@ type InternalMessage =
   | { __twinlink: 'ping'; id: string; sentAt: number }
   | { __twinlink: 'pong'; id: string; sentAt: number }
 
-const ICE_GATHERING_TIMEOUT_MS = 15000
+export interface TwinLinkOptions {
+  rtc?: RTCConfiguration
+  iceGatheringTimeoutMs?: number
+  pingTimeoutMs?: number
+}
 
-export function createTwinLink<T = unknown>(
-  config?: RTCConfiguration,
-): TwinLink<T> {
+const DEFAULT_ICE_GATHERING_TIMEOUT_MS = 15_000
+const DEFAULT_PING_TIMEOUT_MS = 5_000
+
+function encode(data: SignalData): string {
+  try {
+    return btoa(JSON.stringify(data))
+  } catch (e) {
+    throw new Error(
+      `Failed to encode session data: ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
+    )
+  }
+}
+
+function decode(token: string): SignalData {
+  try {
+    const decoded = atob(token.trim())
+    return JSON.parse(decoded) as SignalData
+  } catch (e) {
+    throw new Error(
+      `Invalid session token format: ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
+    )
+  }
+}
+
+export function createTwinLink<Fast = unknown, Reliable = unknown>(
+  options?: TwinLinkOptions,
+): TwinLink<Fast, Reliable> {
+  const iceGatheringTimeoutMs =
+    options?.iceGatheringTimeoutMs ?? DEFAULT_ICE_GATHERING_TIMEOUT_MS
+  const pingTimeoutMs = options?.pingTimeoutMs ?? DEFAULT_PING_TIMEOUT_MS
+
   const pc = new RTCPeerConnection({
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-    ...config,
+    ...options?.rtc,
   })
 
   let fastChannel: RTCDataChannel | null = null
   let reliableChannel: RTCDataChannel | null = null
 
-  let fastHandler: ((data: T) => void) | null = null
-  let reliableHandler: ((data: T) => void) | null = null
-  let stateHandler: ((state: RTCPeerConnectionState) => void) | null = null
+  const fastHandlers = new Set<(data: Fast) => void>()
+  const reliableHandlers = new Set<(data: Reliable) => void>()
+  const stateHandlers = new Set<(state: RTCPeerConnectionState) => void>()
+
   let latencyValue = 0
   let jitterValue = 0
   let previousLatency: number | null = null
-  const pendingPings = new Map<string, (latency: number) => void>()
+
+  const pendingPings = new Map<
+    string,
+    {
+      resolve: (latency: number) => void
+      reject: (error: Error) => void
+    }
+  >()
 
   const iceCandidates: RTCIceCandidateInit[] = []
 
@@ -58,10 +101,20 @@ export function createTwinLink<T = unknown>(
   }
 
   pc.onconnectionstatechange = () => {
-    if (stateHandler) stateHandler(pc.connectionState)
+    if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+      for (const [id, handlers] of pendingPings.entries()) {
+        handlers.reject(
+          new Error(`Connection entered state: ${pc.connectionState}`),
+        )
+        pendingPings.delete(id)
+      }
+    }
+    for (const handler of stateHandlers) {
+      handler(pc.connectionState)
+    }
   }
 
-  const sendReliable = (data: unknown) => {
+  const sendReliable = (data: unknown): boolean => {
     if (reliableChannel?.readyState === 'open') {
       reliableChannel.send(JSON.stringify(data))
       return true
@@ -69,7 +122,7 @@ export function createTwinLink<T = unknown>(
     return false
   }
 
-  const handleInternalMessage = (data: unknown) => {
+  const handleInternalMessage = (data: unknown): boolean => {
     if (
       typeof data !== 'object' ||
       data === null ||
@@ -95,15 +148,15 @@ export function createTwinLink<T = unknown>(
     }
 
     if (message.__twinlink === 'pong') {
-      const resolve = pendingPings.get(message.id)
-      if (resolve) {
+      const handlers = pendingPings.get(message.id)
+      if (handlers) {
         pendingPings.delete(message.id)
         const latency = performance.now() - message.sentAt
         jitterValue =
           previousLatency === null ? 0 : Math.abs(latency - previousLatency)
         previousLatency = latency
         latencyValue = latency
-        resolve(latency)
+        handlers.resolve(latency)
       }
       return true
     }
@@ -113,10 +166,21 @@ export function createTwinLink<T = unknown>(
 
   const setupChannel = (channel: RTCDataChannel, type: 'fast' | 'reliable') => {
     channel.onmessage = (event) => {
-      const data = JSON.parse(event.data) as T
-      if (type === 'reliable' && handleInternalMessage(data)) return
-      if (type === 'fast' && fastHandler) fastHandler(data)
-      if (type === 'reliable' && reliableHandler) reliableHandler(data)
+      try {
+        const data = JSON.parse(event.data) as Fast | Reliable
+        if (type === 'reliable') {
+          if (handleInternalMessage(data)) return
+          for (const handler of reliableHandlers) {
+            handler(data as Reliable)
+          }
+        } else {
+          for (const handler of fastHandlers) {
+            handler(data as Fast)
+          }
+        }
+      } catch (e) {
+        console.error(`Failed to parse incoming ${type} message:`, e)
+      }
     }
   }
 
@@ -137,29 +201,42 @@ export function createTwinLink<T = unknown>(
 
       const cleanup = () => {
         if (timeoutId) clearTimeout(timeoutId)
-        pc.removeEventListener('icegatheringstatechange', check)
+        pc.removeEventListener('icegatheringstatechange', onGathering)
+        pc.removeEventListener('connectionstatechange', onConnection)
       }
 
-      const check = () => {
+      const onGathering = () => {
         if (pc.iceGatheringState === 'complete') {
           cleanup()
           resolve()
         }
       }
 
+      const onConnection = () => {
+        if (
+          pc.connectionState === 'failed' ||
+          pc.connectionState === 'closed'
+        ) {
+          cleanup()
+          reject(
+            new Error(`Connection ${pc.connectionState} during ICE gathering`),
+          )
+        }
+      }
+
       if (pc.iceGatheringState === 'complete') {
         resolve()
-      } else {
-        pc.addEventListener('icegatheringstatechange', check)
-        timeoutId = setTimeout(() => {
-          cleanup()
-          reject(new Error('Timed out waiting for ICE gathering to complete'))
-        }, ICE_GATHERING_TIMEOUT_MS)
+        return
       }
-    })
 
-  const encode = (data: SignalData): string => btoa(JSON.stringify(data))
-  const decode = (token: string): SignalData => JSON.parse(atob(token))
+      pc.addEventListener('icegatheringstatechange', onGathering)
+      pc.addEventListener('connectionstatechange', onConnection)
+
+      timeoutId = setTimeout(() => {
+        cleanup()
+        reject(new Error('Timed out waiting for ICE gathering to complete'))
+      }, iceGatheringTimeoutMs)
+    })
 
   return {
     async host() {
@@ -185,7 +262,11 @@ export function createTwinLink<T = unknown>(
       const offerData = decode(offerToken)
       await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdp))
       for (const candidate of offerData.candidates) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate))
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate))
+        } catch (e) {
+          console.warn('Failed to add ICE candidate:', e)
+        }
       }
 
       const answer = await pc.createAnswer()
@@ -202,7 +283,11 @@ export function createTwinLink<T = unknown>(
       const answerData = decode(answerToken)
       await pc.setRemoteDescription(new RTCSessionDescription(answerData.sdp))
       for (const candidate of answerData.candidates) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate))
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate))
+        } catch (e) {
+          console.warn('Failed to add ICE candidate:', e)
+        }
       }
     },
 
@@ -219,17 +304,54 @@ export function createTwinLink<T = unknown>(
         const timeoutId = setTimeout(() => {
           pendingPings.delete(id)
           reject(new Error('Timed out waiting for ping response'))
-        }, 5000)
+        }, pingTimeoutMs)
 
-        pendingPings.set(id, (value) => {
-          clearTimeout(timeoutId)
-          resolve(value)
+        pendingPings.set(id, {
+          resolve: (value) => {
+            clearTimeout(timeoutId)
+            resolve(value)
+          },
+          reject: (error) => {
+            clearTimeout(timeoutId)
+            reject(error)
+          },
         })
 
-        channel.send(JSON.stringify({ __twinlink: 'ping', id, sentAt }))
+        sendReliable({ __twinlink: 'ping', id, sentAt })
       })
 
       return latency
+    },
+
+    close() {
+      if (fastChannel) {
+        try {
+          fastChannel.close()
+        } catch {
+          // Ignore errors when closing already-closed channels
+        }
+        fastChannel = null
+      }
+      if (reliableChannel) {
+        try {
+          reliableChannel.close()
+        } catch {
+          // Ignore errors when closing already-closed channels
+        }
+        reliableChannel = null
+      }
+      for (const [id, handlers] of pendingPings.entries()) {
+        handlers.reject(new Error('Connection closed by client'))
+        pendingPings.delete(id)
+      }
+      latencyValue = 0
+      jitterValue = 0
+      previousLatency = null
+      try {
+        pc.close()
+      } catch {
+        // Ignore errors when closing already-closed peer connection
+      }
     },
 
     get latency() {
@@ -243,27 +365,30 @@ export function createTwinLink<T = unknown>(
     },
 
     fast: {
-      send(data: T) {
+      send(data: Fast) {
         if (fastChannel?.readyState === 'open') {
           fastChannel.send(JSON.stringify(data))
         }
       },
-      onMessage(handler: (data: T) => void) {
-        fastHandler = handler
+      onMessage(handler: (data: Fast) => void) {
+        fastHandlers.add(handler)
+        return () => fastHandlers.delete(handler)
       },
     },
 
     reliable: {
-      send(data: T) {
-        sendReliable(data)
+      send(data: Reliable): boolean {
+        return sendReliable(data)
       },
-      onMessage(handler: (data: T) => void) {
-        reliableHandler = handler
+      onMessage(handler: (data: Reliable) => void) {
+        reliableHandlers.add(handler)
+        return () => reliableHandlers.delete(handler)
       },
     },
 
     onConnectionStateChange(handler: (state: RTCPeerConnectionState) => void) {
-      stateHandler = handler
+      stateHandlers.add(handler)
+      return () => stateHandlers.delete(handler)
     },
   }
 }
