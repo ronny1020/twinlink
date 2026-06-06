@@ -44,9 +44,9 @@
     "url": "git+https://github.com/ronny1020/twinlink.git"
   },
   "bugs": {
-    "url": "https://github.com/twinlink-org/twinlink/issues"
+    "url": "https://github.com/ronny1020/twinlink/issues"
   },
-  "homepage": "https://github.com/twinlink-org/twinlink#readme",
+  "homepage": "https://github.com/ronny1020/twinlink#readme",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/bun": "latest",
