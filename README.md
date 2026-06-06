@@ -225,7 +225,7 @@ link.reliable.onMessage((event) => {
 })
 ```
 
-If both channels share the same message shape, pass a single type for both:
+If both channels share the same message shape, pass the same type for both generics:
 
 ```ts
 type Msg = { type: string; payload: unknown }

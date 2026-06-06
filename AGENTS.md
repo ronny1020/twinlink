@@ -24,7 +24,7 @@ Four rules that never bend:
 
 ## Repository Layout
 
-```
+```text
 twinlink/
 ├── src/
 │   ├── index.ts          # Entire library — single public module
@@ -37,7 +37,7 @@ twinlink/
 │   └── src/
 │       └── index.tsx     # React demo app
 ├── dist/                 # Build output — never edit directly
-├── CLAUDE.md             # Bun-specific tooling rules
+├── CLAUDE.md             # pointer to @AGENTS.md
 ├── AGENTS.md             # This file
 ├── CONTRIBUTING.md       # Dev setup, testing, build instructions
 └── README.md             # User-facing docs only
@@ -49,7 +49,7 @@ twinlink/
 
 All exports live in `src/index.ts`.
 
-```ts
+```typescript
 export interface TwinLinkOptions {
   rtc?: RTCConfiguration
   iceGatheringTimeoutMs?: number // default: 15 000 ms
@@ -61,7 +61,7 @@ export function createTwinLink<Fast = unknown, Reliable = unknown>(
 ): TwinLink<Fast, Reliable>
 ```
 
-```ts
+```typescript
 interface TwinLink<Fast, Reliable> {
   host(): Promise<string>
   join(offer: string): Promise<string>
@@ -110,8 +110,6 @@ host()  ──offer──▶   join(offer)
         ◀─answer──
 connect(answer)
 ```
-
-Tokens are base64-encoded `{ sdp, candidates }`. ICE gathering completes fully before encoding — trickle-ICE is not used.
 
 ---
 
@@ -194,7 +192,7 @@ release/1.2.0
 
 Follow Conventional Commits. **Scope is required** — a commit without a scope is invalid.
 
-```
+```text
 <type>(<scope>): <short description>
 ```
 
@@ -240,7 +238,7 @@ chore(build): upgrade Bun to 1.2.0
 
 **Breaking changes** — add a footer:
 
-```
+```bash
 feat(api): split generic into Fast and Reliable type params
 
 BREAKING CHANGE: createTwinLink now takes <Fast, Reliable> instead of <T>.
@@ -269,7 +267,7 @@ Write the body to a temp file, then pass it to `gh`:
 gh pr create \
   --title "<type>(<scope>): <short description>" \
   --body-file /tmp/pr-body.md \
-  --base main \
+  --base master \
   --head <your-branch>
 ```
 

@@ -41,14 +41,14 @@ const App = () => {
   // Copy indicator states
   const [copiedLocal, setCopiedLocal] = useState(false)
 
-  const linkRef = useRef<TwinLink<ChatMessage>>(null)
+  const linkRef = useRef<TwinLink<unknown, ChatMessage>>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
+  const initTwinLink = () => {
     const urlParams = new URLSearchParams(window.location.search)
     const noIce = urlParams.has('noice')
 
-    linkRef.current = createTwinLink<ChatMessage>(
+    linkRef.current = createTwinLink<unknown, ChatMessage>(
       noIce ? { rtc: { iceServers: [] } } : undefined,
     )
     linkRef.current.onConnectionStateChange((state) => {
@@ -59,7 +59,7 @@ const App = () => {
         setMessages((prev) => [
           ...prev,
           {
-            id: Math.random().toString(36).substring(2, 11),
+            id: crypto.randomUUID(),
             text: msg.text,
             sender: 'them',
             timestamp: Date.now(),
@@ -67,6 +67,10 @@ const App = () => {
         ])
       }
     })
+  }
+
+  useEffect(() => {
+    initTwinLink()
 
     return () => {
       if (linkRef.current) {
@@ -120,29 +124,9 @@ const App = () => {
     if (linkRef.current) {
       linkRef.current.close()
     }
-    const urlParams = new URLSearchParams(window.location.search)
-    const noIce = urlParams.has('noice')
 
     // Reinitialize
-    linkRef.current = createTwinLink<ChatMessage>(
-      noIce ? { rtc: { iceServers: [] } } : undefined,
-    )
-    linkRef.current.onConnectionStateChange((state) => {
-      setStatus(state)
-    })
-    linkRef.current.reliable.onMessage((msg: unknown) => {
-      if (isChatMessage(msg)) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Math.random().toString(36).substring(2, 11),
-            text: msg.text,
-            sender: 'them',
-            timestamp: Date.now(),
-          },
-        ])
-      }
-    })
+    initTwinLink()
 
     // Reset UI state
     setRole('none')
@@ -169,11 +153,15 @@ const App = () => {
   const sendMessage = () => {
     if (!inputText.trim()) return
     const msg: ChatMessage = { type: 'chat', text: inputText }
-    linkRef.current!.reliable.send(msg)
+    const sent = linkRef.current!.reliable.send(msg)
+    if (!sent) {
+      console.warn('Message dropped: reliable channel buffer full')
+      return
+    }
     setMessages((prev) => [
       ...prev,
       {
-        id: Math.random().toString(36).substring(2, 11),
+        id: crypto.randomUUID(),
         text: inputText,
         sender: 'me',
         timestamp: Date.now(),
