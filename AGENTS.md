@@ -52,7 +52,7 @@ All exports live in `src/index.ts`.
 ```typescript
 export interface TwinLinkOptions {
   rtc?: RTCConfiguration
-  iceGatheringTimeoutMs?: number // default: 15 000 ms
+  iceGatheringTimeoutMs?: number // default: 5 000 ms
   pingTimeoutMs?: number // default:  5 000 ms
 }
 
@@ -145,6 +145,7 @@ After every change, run `bun run typecheck`, `bun run lint`, and `bun test`. Fix
 - Opens real browser windows via `Bun.WebView`.
 - Spins up a local `Bun.serve()` pointing at `demo/index.html`.
 - Covers the full host → join → connect → message flow over a live WebRTC session.
+- **Important**: The demo UI MUST use `data-testid` attributes for all interactive elements to ensure reliable selection in these tests.
 - Slow (~4–8 s) and requires a display. They run in CI via the standard `bun test` command.
 
 ---

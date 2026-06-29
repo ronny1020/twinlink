@@ -240,7 +240,7 @@ const link = createTwinLink<Msg, Msg>()
 import { createTwinLink, TwinLinkOptions } from 'twinlink'
 
 const options: TwinLinkOptions = {
-  iceGatheringTimeoutMs: 10_000, // default: 15 000
+  iceGatheringTimeoutMs: 10_000, // default: 5 000
   pingTimeoutMs: 3_000, // default:  5 000
   rtc: {
     iceServers: [
