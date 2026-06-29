@@ -1,20 +1,108 @@
+/**
+ * Options for configuring a TwinLink instance.
+ */
+export interface TwinLinkOptions {
+  /**
+   * Optional WebRTC configuration.
+   * Use this to provide custom STUN/TURN servers.
+   */
+  rtc?: RTCConfiguration
+  /**
+   * Timeout in milliseconds to wait for ICE gathering to complete before generating a token.
+   * Default: 30,000ms.
+   */
+  iceGatheringTimeoutMs?: number
+  /**
+   * Timeout in milliseconds for ping responses.
+   * Default: 5,000ms.
+   */
+  pingTimeoutMs?: number
+}
+
+/**
+ * A TwinLink instance representing a 1-on-1 peer connection.
+ * @template Fast - The type of messages sent over the unreliable/unordered channel.
+ * @template Reliable - The type of messages sent over the reliable/ordered channel.
+ */
 export interface TwinLink<Fast = unknown, Reliable = unknown> {
+  /**
+   * Initializes the host side of the connection.
+   * Creates a WebRTC offer and waits for ICE gathering.
+   * @returns A base64 offer token to be sent to the joiner.
+   */
   host(): Promise<string>
+  /**
+   * Initializes the joiner side of the connection using an offer token.
+   * Creates a WebRTC answer and waits for ICE gathering.
+   * @param offer - The base64 offer token from the host.
+   * @returns A base64 answer token to be sent back to the host.
+   */
   join(offer: string): Promise<string>
+  /**
+   * Completes the connection flow on the host side using an answer token.
+   * @param answer - The base64 answer token from the joiner.
+   */
   connect(answer: string): Promise<void>
+  /**
+   * Measures the round-trip time (RTT) to the peer.
+   * Updates `latency` and `jitter` properties on success.
+   * @returns A promise resolving to the RTT in milliseconds.
+   * @throws Error if the reliable channel is not open.
+   */
   ping(): Promise<number>
+  /**
+   * Closes all data channels and the peer connection.
+   * Resets metrics to 0.
+   */
   close(): void
+  /**
+   * The last measured round-trip time in milliseconds.
+   */
   latency: number
+  /**
+   * The variation in round-trip time between the last two measurements.
+   */
   jitter: number
+  /**
+   * The current state of the underlying RTCPeerConnection.
+   */
   connectionState: RTCPeerConnectionState
+  /**
+   * Methods for the unreliable, unordered "fast" channel.
+   * Suitable for data where occasional loss or out-of-order arrival is acceptable (e.g., positions).
+   */
   fast: {
+    /**
+     * Sends data over the fast channel.
+     * Drops silently if the channel is not open.
+     */
     send(data: Fast): void
+    /**
+     * Registers a listener for incoming messages on the fast channel.
+     * @returns An unsubscribe function.
+     */
     onMessage: (handler: (data: Fast) => void) => () => void
   }
+  /**
+   * Methods for the reliable, ordered "reliable" channel.
+   * Suitable for data that must arrive intact and in order (e.g., chat).
+   */
   reliable: {
+    /**
+     * Sends data over the reliable channel.
+     * @returns true if the data was buffered, false if the channel is not open.
+     */
     send(data: Reliable): boolean
+    /**
+     * Registers a listener for incoming messages on the reliable channel.
+     * @returns An unsubscribe function.
+     */
     onMessage: (handler: (data: Reliable) => void) => () => void
   }
+  /**
+   * Registers a listener for connection state changes.
+   * @returns An unsubscribe function.
+   */
   onConnectionStateChange: (
     handler: (state: RTCPeerConnectionState) => void,
   ) => () => void
@@ -29,13 +117,7 @@ type InternalMessage =
   | { __twinlink: 'ping'; id: string; sentAt: number }
   | { __twinlink: 'pong'; id: string; sentAt: number }
 
-export interface TwinLinkOptions {
-  rtc?: RTCConfiguration
-  iceGatheringTimeoutMs?: number
-  pingTimeoutMs?: number
-}
-
-const DEFAULT_ICE_GATHERING_TIMEOUT_MS = 15_000
+const DEFAULT_ICE_GATHERING_TIMEOUT_MS = 30_000
 const DEFAULT_PING_TIMEOUT_MS = 5_000
 
 function encode(data: SignalData): string {
@@ -61,6 +143,13 @@ function decode(token: string): SignalData {
   }
 }
 
+/**
+ * Creates a new TwinLink instance.
+ * @template Fast - The type of messages sent over the unreliable/unordered channel.
+ * @template Reliable - The type of messages sent over the reliable/ordered channel.
+ * @param options - Configuration options.
+ * @returns A TwinLink instance.
+ */
 export function createTwinLink<Fast = unknown, Reliable = unknown>(
   options?: TwinLinkOptions,
 ): TwinLink<Fast, Reliable> {
@@ -114,7 +203,7 @@ export function createTwinLink<Fast = unknown, Reliable = unknown>(
     }
   }
 
-  const sendReliable = (data: unknown): boolean => {
+  function sendReliable(data: unknown): boolean {
     if (reliableChannel?.readyState === 'open') {
       reliableChannel.send(JSON.stringify(data))
       return true
@@ -122,7 +211,7 @@ export function createTwinLink<Fast = unknown, Reliable = unknown>(
     return false
   }
 
-  const handleInternalMessage = (data: unknown): boolean => {
+  function handleInternalMessage(data: unknown): boolean {
     if (
       typeof data !== 'object' ||
       data === null ||
@@ -164,7 +253,7 @@ export function createTwinLink<Fast = unknown, Reliable = unknown>(
     return false
   }
 
-  const setupChannel = (channel: RTCDataChannel, type: 'fast' | 'reliable') => {
+  function setupChannel(channel: RTCDataChannel, type: 'fast' | 'reliable') {
     channel.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as Fast | Reliable
@@ -195,48 +284,33 @@ export function createTwinLink<Fast = unknown, Reliable = unknown>(
     }
   }
 
-  const waitForIce = () =>
-    new Promise<void>((resolve, reject) => {
-      let timeoutId: ReturnType<typeof setTimeout> | null = null
+  function waitForIce() {
+    return new Promise<void>((resolve) => {
+      const timeoutMs = iceGatheringTimeoutMs
+      const timer = setTimeout(() => {
+        pc.removeEventListener('icegatheringstatechange', onStateChange)
+        console.warn(
+          `ICE gathering timed out after ${timeoutMs}ms. Proceeding with ${iceCandidates.length} candidates.`,
+        )
+        resolve()
+      }, timeoutMs)
 
-      const cleanup = () => {
-        if (timeoutId) clearTimeout(timeoutId)
-        pc.removeEventListener('icegatheringstatechange', onGathering)
-        pc.removeEventListener('connectionstatechange', onConnection)
-      }
-
-      const onGathering = () => {
+      function onStateChange() {
         if (pc.iceGatheringState === 'complete') {
-          cleanup()
+          clearTimeout(timer)
+          pc.removeEventListener('icegatheringstatechange', onStateChange)
           resolve()
         }
       }
 
-      const onConnection = () => {
-        if (
-          pc.connectionState === 'failed' ||
-          pc.connectionState === 'closed'
-        ) {
-          cleanup()
-          reject(
-            new Error(`Connection ${pc.connectionState} during ICE gathering`),
-          )
-        }
-      }
-
       if (pc.iceGatheringState === 'complete') {
+        clearTimeout(timer)
         resolve()
-        return
+      } else {
+        pc.addEventListener('icegatheringstatechange', onStateChange)
       }
-
-      pc.addEventListener('icegatheringstatechange', onGathering)
-      pc.addEventListener('connectionstatechange', onConnection)
-
-      timeoutId = setTimeout(() => {
-        cleanup()
-        reject(new Error('Timed out waiting for ICE gathering to complete'))
-      }, iceGatheringTimeoutMs)
     })
+  }
 
   return {
     async host() {
