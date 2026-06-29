@@ -22,8 +22,10 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
 
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "twinlink": ["../src/index.ts"]
     },
 
     // Some stricter flags (disabled by default)
