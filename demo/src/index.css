@@ -3,5 +3,9 @@
 @tailwind utilities;
 
 body {
-  @apply bg-slate-950 font-sans m-0 p-0 text-gray-100;
+  background-color: #020617;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  margin: 0;
+  padding: 0;
+  color: #f3f4f6;
 }

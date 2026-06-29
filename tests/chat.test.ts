@@ -52,29 +52,29 @@ test('1-on-1 chat connection and messaging', async () => {
     await hostView.navigate(url)
     await joinerView.navigate(url)
 
-    // Wait for hydration
+    // Wait for hydration via data-testid
     console.log('--- WAITING FOR HYDRATION ---')
     await waitFor(
       hostView,
-      "document.body.innerText.includes('Host Session')",
+      'document.querySelector(\'[data-testid="host-button"]\') !== null',
       'HOST_INIT',
     )
     await waitFor(
       joinerView,
-      "document.body.innerText.includes('Host Session')",
+      'document.querySelector(\'[data-testid="host-button"]\') !== null',
       'JOINER_INIT',
     )
 
     // Host Step
     console.log('--- HOST: Starting session ---')
     await hostView.evaluate(
-      "Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Host')).click()",
+      'document.querySelector(\'[data-testid="host-button"]\').click()',
     )
 
     console.log('--- HOST: Waiting for offer token ---')
     const offerToken = (await waitFor(
       hostView,
-      "(() => { const el = Array.from(document.querySelectorAll('textarea')).find(t => t.placeholder.includes('Generating') || t.readOnly); return el && el.value ? el.value : null; })()",
+      '(() => { const el = document.querySelector(\'[data-testid="offer-token"]\'); return el && el.value ? el.value : null; })()',
       'HOST_OFFER',
       30000,
     )) as string
@@ -84,17 +84,17 @@ test('1-on-1 chat connection and messaging', async () => {
     // Joiner Step
     console.log('--- JOINER: Joining session ---')
     await joinerView.evaluate(
-      "Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Join')).click()",
+      'document.querySelector(\'[data-testid="join-button"]\').click()',
     )
 
     console.log('--- JOINER: Inputting offer token ---')
     await waitFor(
       joinerView,
-      "document.querySelectorAll('textarea').length > 0",
+      'document.querySelector(\'[data-testid="offer-input"]\') !== null',
       'JOINER_INPUT_READY',
     )
     await joinerView.evaluate(`(() => {
-      const el = Array.from(document.querySelectorAll('textarea')).find(t => t.placeholder.includes('Paste'));
+      const el = document.querySelector('[data-testid="offer-input"]');
       if (el) {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
         setter.call(el, ${JSON.stringify(offerToken)});
@@ -106,13 +106,13 @@ test('1-on-1 chat connection and messaging', async () => {
     await wait(1000)
     console.log('--- JOINER: Generating answer ---')
     await joinerView.evaluate(
-      "Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Generate Answer')).click()",
+      'document.querySelector(\'[data-testid="generate-answer-button"]\').click()',
     )
 
     console.log('--- JOINER: Waiting for answer token ---')
     const answerToken = (await waitFor(
       joinerView,
-      "(() => { const el = Array.from(document.querySelectorAll('textarea')).find(t => t.readOnly && t.value && !t.value.startsWith('eyJzZHAiOnsidHlwZSI6Im9mZmVyI')); return el ? el.value : null; })()",
+      '(() => { const el = document.querySelector(\'[data-testid="answer-token"]\'); return el && el.value ? el.value : null; })()',
       'JOINER_ANSWER',
       30000,
     )) as string
@@ -122,7 +122,7 @@ test('1-on-1 chat connection and messaging', async () => {
     // Connect Host Step
     console.log('--- HOST: Inputting answer token ---')
     await hostView.evaluate(`(() => {
-      const el = Array.from(document.querySelectorAll('textarea')).find(t => t.placeholder.includes('Paste'));
+      const el = document.querySelector('[data-testid="answer-input"]');
       if (el) {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
         setter.call(el, ${JSON.stringify(answerToken)});
@@ -134,23 +134,15 @@ test('1-on-1 chat connection and messaging', async () => {
     await wait(1000)
     console.log('--- HOST: Connecting ---')
     await hostView.evaluate(
-      "Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Connect').click()",
+      'document.querySelector(\'[data-testid="connect-button"]\').click()',
     )
 
-    // Verify Connection
+    // Verify Connection (Exact status match to prevent false positives from 'disconnected')
     console.log('--- WAITING FOR CONNECTION ---')
-    await waitFor(
-      hostView,
-      "document.body.innerText.toLowerCase().includes('connected')",
-      'HOST_CONNECTION',
-      60000,
-    )
-    await waitFor(
-      joinerView,
-      "document.body.innerText.toLowerCase().includes('connected')",
-      'JOINER_CONNECTION',
-      60000,
-    )
+    const exactStatusCheck =
+      "(() => { const el = document.querySelector('[data-testid=\"status-badge\"]'); return el && el.innerText.trim().toLowerCase() === 'connected' ? 'connected' : null; })()"
+    await waitFor(hostView, exactStatusCheck, 'HOST_CONNECTION', 60000)
+    await waitFor(joinerView, exactStatusCheck, 'JOINER_CONNECTION', 60000)
     console.log('--- CONNECTED! ---')
 
     // Messaging Test
@@ -160,8 +152,8 @@ test('1-on-1 chat connection and messaging', async () => {
 
     // Host sends message
     await hostView.evaluate(`(() => {
-      const input = document.querySelector('input[type="text"]');
-      const button = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Send');
+      const input = document.querySelector('[data-testid="chat-input"]');
+      const button = document.querySelector('[data-testid="send-button"]');
       if (input && button) {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
         setter.call(input, ${JSON.stringify(testMessage)});
@@ -173,7 +165,7 @@ test('1-on-1 chat connection and messaging', async () => {
     console.log('--- WAITING FOR MESSAGE ON JOINER ---')
     await waitFor(
       joinerView,
-      `document.body.innerText.includes(${JSON.stringify(testMessage)})`,
+      `(() => { const el = document.querySelector('[data-testid="chat-messages"]'); return el && el.innerText.includes(${JSON.stringify(testMessage)}) ? true : null; })()`,
       'JOINER_MSG',
       20000,
     )
@@ -184,8 +176,8 @@ test('1-on-1 chat connection and messaging', async () => {
 
     // Joiner sends reply
     await joinerView.evaluate(`(() => {
-      const input = document.querySelector('input[type="text"]');
-      const button = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Send');
+      const input = document.querySelector('[data-testid="chat-input"]');
+      const button = document.querySelector('[data-testid="send-button"]');
       if (input && button) {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
         setter.call(input, ${JSON.stringify(replyMessage)});
@@ -197,7 +189,7 @@ test('1-on-1 chat connection and messaging', async () => {
     console.log('--- WAITING FOR REPLY ON HOST ---')
     await waitFor(
       hostView,
-      `document.body.innerText.includes(${JSON.stringify(replyMessage)})`,
+      `(() => { const el = document.querySelector('[data-testid="chat-messages"]'); return el && el.innerText.includes(${JSON.stringify(replyMessage)}) ? true : null; })()`,
       'HOST_MSG',
       10000,
     )

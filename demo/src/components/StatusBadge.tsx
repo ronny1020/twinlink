@@ -21,7 +21,10 @@ export function StatusBadge({ status }: { status: RTCPeerConnectionState }) {
         `}
       />
       <span>
-        Status: <strong className="capitalize">{status}</strong>
+        Status:{' '}
+        <strong data-testid="status-badge" className="capitalize">
+          {status}
+        </strong>
       </span>
     </div>
   )
