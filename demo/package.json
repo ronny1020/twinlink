@@ -4,16 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "bun --hot index.ts",
-    "build": "rm -rf dist && bun build index.html --outdir dist --minify"
+    "dev": "bun --hot index.ts",
+    "start": "NODE_ENV=production bun src/index.ts",
+    "build": "bun run build.ts"
   },
   "dependencies": {
+    "bun-plugin-tailwind": "^0.1.2",
     "twinlink": "file:..",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@types/react": "^19.2.16",
-    "@types/react-dom": "^19.2.3"
+    "@types/bun": "latest",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint-plugin-better-tailwindcss": "^4.5.0",
+    "tailwindcss": "3"
   }
 }
