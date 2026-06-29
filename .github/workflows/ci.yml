@@ -34,11 +34,11 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Test
-        run: bun test
-
       - name: Build Library
         run: bun run build
+
+      - name: Test
+        run: bun test
 
       - name: Build Demo
         run: bun run demo:build
