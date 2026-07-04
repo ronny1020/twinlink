@@ -2,7 +2,7 @@ import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import prettierPlugin from 'eslint-plugin-prettier'
 
-export default tseslint.config(
+export default tseslint.config([
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -11,6 +11,7 @@ export default tseslint.config(
     },
     rules: {
       'prettier/prettier': 'error',
+      'func-style': ['error', 'declaration'],
       'no-restricted-syntax': [
         'error',
         {
@@ -23,6 +24,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/', 'demo/dist/'],
+    ignores: ['dist/', 'demo/'],
   },
-)
+])
