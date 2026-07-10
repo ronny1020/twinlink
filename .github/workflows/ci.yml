@@ -9,11 +9,11 @@ on:
 permissions:
   contents: read
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# Cancel any in-progress run for the same branch immediately so stale runs
+# don't linger long enough for their uploaded artifacts to expire.
 concurrency:
-  group: 'pages'
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
