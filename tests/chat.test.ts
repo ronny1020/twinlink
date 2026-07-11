@@ -38,6 +38,7 @@ async function waitFor(
 
 test('1-on-1 chat connection and messaging', async () => {
   const server = Bun.serve({
+    hostname: '127.0.0.1',
     port: 0,
     routes: {
       '/': index,
@@ -197,6 +198,6 @@ test('1-on-1 chat connection and messaging', async () => {
   } finally {
     hostView.close()
     joinerView.close()
-    server.stop()
+    server.stop(true)
   }
 }, 300000)

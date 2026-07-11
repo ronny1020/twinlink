@@ -21,9 +21,9 @@ Please be respectful and professional in your interactions.
 ### Pull Requests
 
 1. Fork the repository.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4. Push to the branch (`git push origin feature/AmazingFeature`).
+2. Create a branch using the repository convention (for example, `feat/amazing-feature`).
+3. Commit using a scoped Conventional Commit (for example, `feat(api): add amazing feature`).
+4. Push the branch (`git push origin feat/amazing-feature`).
 5. Open a Pull Request.
 
 ## Development Setup
@@ -81,6 +81,21 @@ To compile the library for distribution (ESM, CJS, and `.d.ts`):
 
 ```bash
 bun run build
+```
+
+### Publishing (Maintainers)
+
+Package publication is manual; CI only deploys the demo. Before publishing, use a `release/<version>` branch, choose a new version that has not already been published, and run:
+
+```bash
+bun run release:check
+bun pm pack --dry-run --ignore-scripts
+```
+
+When both checks pass, publish with your npm credentials:
+
+```bash
+npm publish
 ```
 
 ### Deployment

@@ -52,7 +52,7 @@ All exports live in `src/index.ts`.
 ```typescript
 export interface TwinLinkOptions {
   rtc?: RTCConfiguration
-  iceGatheringTimeoutMs?: number // default: 5 000 ms
+  iceGatheringTimeoutMs?: number // default: 30 000 ms
   pingTimeoutMs?: number // default:  5 000 ms
 }
 

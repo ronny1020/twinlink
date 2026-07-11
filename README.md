@@ -23,16 +23,17 @@ No application server required after connection is established.
 ```ts
 import { createTwinLink } from 'twinlink'
 
-const link = createTwinLink()
+const hostLink = createTwinLink()
+const joinerLink = createTwinLink()
 
 // Host peer: generate an offer token
-const offer = await link.host()
+const offer = await hostLink.host()
 
 // Joiner peer: join with the offer, get back an answer token
-const answer = await link.join(offer)
+const answer = await joinerLink.join(offer)
 
 // Host peer: finalize the connection with the answer token
-await link.connect(answer)
+await hostLink.connect(answer)
 ```
 
 No SDP, ICE, or WebRTC knowledge required.
@@ -85,6 +86,22 @@ npm install twinlink
 # or
 bun add twinlink
 ```
+
+---
+
+## Browser CDN
+
+TwinLink can also be imported directly by a browser as an ES module:
+
+```html
+<script type="module">
+  import { createTwinLink } from 'https://cdn.jsdelivr.net/npm/twinlink@latest/dist/index.mjs'
+
+  const link = createTwinLink()
+</script>
+```
+
+For production, replace `latest` with the exact published version.
 
 ---
 
@@ -240,7 +257,7 @@ const link = createTwinLink<Msg, Msg>()
 import { createTwinLink, TwinLinkOptions } from 'twinlink'
 
 const options: TwinLinkOptions = {
-  iceGatheringTimeoutMs: 10_000, // default: 5 000
+  iceGatheringTimeoutMs: 10_000, // default: 30 000
   pingTimeoutMs: 3_000, // default:  5 000
   rtc: {
     iceServers: [
@@ -277,7 +294,7 @@ A typical agent workflow:
   </head>
   <body>
     <script type="module">
-      import { createTwinLink } from 'https://cdn.jsdelivr.net/npm/twinlink/+esm'
+      import { createTwinLink } from 'https://cdn.jsdelivr.net/npm/twinlink@latest/dist/index.mjs'
 
       const link = createTwinLink()
 
